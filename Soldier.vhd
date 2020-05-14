@@ -1,0 +1,388 @@
+LIBRARY IEEE;
+USE IEEE.STD_LOGIC_1164.ALL;
+USE IEEE.NUMERIC_STD.ALL;
+
+ENTITY SOLDIER IS
+	PORT (
+		CLK				:	IN STD_LOGIC;
+		RST				:	IN STD_LOGIC;
+		PLAYER			:	IN STD_LOGIC;
+		ENEMY_A			:	IN STD_LOGIC;
+		ENEMY_B			: 	IN STD_LOGIC;
+		EN					:	INOUT STD_LOGIC;
+		OUTPUT			:	OUT STD_LOGIC
+	);
+END SOLDIER;
+
+ARCHITECTURE BEHAVIOUR OF SOLDIER IS
+
+TYPE STATE IS (GREEN, YELLOW, RED, INTERRUPT, SEEK, HIDE, BLACK, STORM, AIM, SHOOT, BURST, COVER, AID, FINISH);
+SIGNAL PRESENT						: STATE;
+SIGNAL NEXT_STATE					: STATE;
+SIGNAL TEMP							: STD_LOGIC;
+SIGNAL PLAYER_HP					: INTEGER := 15;
+SIGNAL ENEMYA_HP					: INTEGER := 6;
+SIGNAL ENEMYB_HP					: INTEGER := 6;
+
+--PROCEDURE RANDOMIZE_TRAIN ( 
+--		SIGNAL INPUT_AF	: INOUT INTEGER;
+--		SIGNAL INPUT_BF	: INOUT INTEGER) IS
+--BEGIN
+--		IF(INPUT_AF<80 AND INPUT_BF<80) THEN
+--			INPUT_AF <= INPUT_AF + (INPUT_AF / 2 + INPUT_AF MOD 5);
+--			INPUT_BF <= INPUT_BF + (INPUT_BF / 2 + INPUT_BF MOD 6);
+--		ELSIF(INPUT_AF>80 OR INPUT_BF>80) THEN
+--			INPUT_AF <= 80;
+--			INPUT_BF <= 80;
+--		END IF;
+--		
+--END PROCEDURE;
+
+--PROCEDURE RANDOMIZE_ATTACK (
+--			SIGNAL INPUT_AF : INOUT INTEGER;
+--			SIGNAL INPUT_BF : INOUT INTEGER) IS
+--BEGIN
+--	IF(INPUT_AF>80 AND INPUT_BF>80) THEN
+--		--Mengevaluasikan damage ketika PRESENT=AMBUSH
+--		IF(PRESENT=AMBUSHED AND EN='0') THEN
+--			INPUT_AF <= INPUT_AF - (INPUT_BF + INPUT_BF MOD 4);
+--			INPUT_BF <= INPUT_BF - (INPUT_AF + INPUT_AF MOD 3);
+--		ELSIF(PRESENT=AMBUSHED AND EN='1') THEN
+--			INPUT_AF <= INPUT_AF - (INPUT_AF + INPUT_BF MOD 5);	
+--			INPUT_BF <= INPUT_BF - (INPUT_AF + INPUT_AF MOD 5);
+--		END IF;
+--		
+--		--Mengevaluasikan damage ketika PRESENT=ATTACK
+--		IF(PRESENT=ATTACK AND EN='0') THEN
+--			INPUT_BF <= INPUT_BF - (INPUT_AF + INPUT_AF MOD 4);
+--			INPUT_AF <= INPUT_AF - (INPUT_AF + INPUT_BF MOD 2);
+--		ELSIF(PRESENT=ATTACK AND EN='1') THEN
+--			INPUT_BF <= INPUT_BF - (INPUT_AF + INPUT_AF MOD 6);
+--			INPUT_AF <= INPUT_AF - (INPUT_BF + INPUT_BF MOD 2);
+--		END IF;
+--		
+--		--Mengevaluasikan damage ketika PRESENT=RETREAT
+--		IF(PRESENT=RETREAT AND EN='0') THEN
+--			INPUT_AF <= INPUT_AF - (INPUT_BF + INPUT_BF MOD 6);
+--			INPUT_BF <= INPUT_BF - (INPUT_AF + INPUT_AF MOD 1);
+--		ELSIF(PRESENT=RETREAT AND EN='1') THEN
+--			INPUT_AF <= INPUT_AF - (INPUT_BF + INPUT_BF MOD 6);
+--			INPUT_BF <= INPUT_BF - (INPUT_AF + INPUT_AF MOD 3);	
+--		END IF;
+--		
+--		--Mengevaluasikan damage ketika PRESENT=STRUGGLE
+--		IF(PRESENT=STRUGGLE AND EN='0') THEN
+--			INPUT_BF <= INPUT_BF - (INPUT_AF + INPUT_AF MOD 4);
+--			INPUT_AF <= INPUT_AF - (INPUT_BF + INPUT_BF MOD 4);
+--		ELSIF(PRESENT=STRUGGLE AND EN='1') THEN
+--			INPUT_BF <= INPUT_BF - (INPUT_AF + INPUT_AF MOD 5);
+--			INPUT_AF <= INPUT_AF - (INPUT_BF + INPUT_BF MOD 4);			
+--		END IF;
+--		
+--		--Fail-safe bila AF dan BF bernilai negatif
+--		ELSIF((INPUT_AF<0) OR (INPUT_BF<0)) THEN
+--			INPUT_AF <= 1;
+--			INPUT_BF <= 1;
+--		END IF;
+--		
+--END PROCEDURE;
+
+BEGIN
+
+--Cek kondisi
+PROCESS(CLK, PRESENT, PLAYER, ENEMY_A, ENEMY_B, EN) IS
+	BEGIN
+		CASE PRESENT IS
+			--Kondisi saat ini 'GREEN'
+			WHEN GREEN =>
+				IF(PLAYER='0') THEN
+					NEXT_STATE <= GREEN;
+				ELSIF(PLAYER='1') THEN
+					NEXT_STATE <= YELLOW;
+				ELSE
+					NEXT_STATE <= GREEN;
+				END IF;
+			--Kondisi saat ini 'YELLOW'
+			WHEN YELLOW =>
+				IF(PLAYER='0') THEN
+					NEXT_STATE <= GREEN;
+				ELSIF(PLAYER='1') THEN
+					NEXT_STATE <= RED;
+				ELSE
+					NEXT_STATE <= YELLOW;
+				END IF;
+			--Kondisi saat ini 'RED'
+			WHEN RED =>
+				IF(PLAYER='0' AND ENEMY_A='0' AND ENEMY_B='0') THEN
+					NEXT_STATE <= INTERRUPT;
+				ELSIF((PLAYER='0' AND ENEMY_B='1') OR (PLAYER='0' AND ENEMY_A='1')) THEN
+					NEXT_STATE <= SEEK;
+				ELSIF(PLAYER='1' AND ENEMY_A='0' AND ENEMY_B='0') THEN
+					NEXT_STATE <= HIDE;	
+				ELSIF((PLAYER='1' AND ENEMY_B='1') OR (PLAYER='1' AND ENEMY_A='1')) THEN
+					NEXT_STATE <= RED;
+				ELSIF(PLAYER='1' AND ENEMY_A='1' AND ENEMY_B='1') THEN
+					NEXT_STATE <= BLACK;
+				ELSE
+					NEXT_STATE <= RED;
+				END IF;
+			--Kondisi saat ini 'INTERRUPT'
+			WHEN INTERRUPT =>
+				IF(PLAYER='0') THEN
+					NEXT_STATE <= RED;
+				ELSIF(PLAYER='1' AND ENEMY_A='0' AND ENEMY_B='0') THEN
+					NEXT_STATE <= INTERRUPT;
+				ELSIF((PLAYER='1' AND ENEMY_B='1') OR (PLAYER='1' AND ENEMY_A='1')) THEN
+					NEXT_STATE <= BLACK;
+				ELSIF(PLAYER='1' AND ENEMY_A='1' AND ENEMY_B='1') THEN
+					NEXT_STATE <= HIDE;
+				ELSE
+					NEXT_STATE <= INTERRUPT;
+				END IF;
+			--Kondisi saat ini 'SEEK'
+			WHEN SEEK =>
+				IF(PLAYER='0') THEN
+					NEXT_STATE <= YELLOW;
+				ELSIF((PLAYER='1' AND ENEMY_B='1') OR (PLAYER='1' AND ENEMY_A='1')) THEN
+					NEXT_STATE <= INTERRUPT;
+				ELSIF(PLAYER='1' AND ENEMY_A='1' AND ENEMY_B='1') THEN
+					NEXT_STATE <= BLACK;
+				ELSE
+					NEXT_STATE <= SEEK;
+				END IF;
+			--Kondisi saat ini 'HIDE'
+			WHEN HIDE =>
+				IF(PLAYER='0') THEN
+					NEXT_STATE <= YELLOW;
+				ELSIF((PLAYER='1' AND ENEMY_B='1') OR (PLAYER='1' AND ENEMY_A='1')) THEN
+					NEXT_STATE <= RED;
+				ELSIF(PLAYER='1' AND ENEMY_A='1' AND ENEMY_B='1') THEN
+					NEXT_STATE <= BLACK;
+				ELSE
+					NEXT_STATE <= HIDE;
+				END IF;
+			--Kondisi saat ini 'BLACK'
+			WHEN BLACK =>
+				IF(PLAYER='0' AND ENEMY_A='0' AND ENEMY_B='0') THEN
+					NEXT_STATE <= STORM;
+				ELSIF(PLAYER='0' AND ENEMY_B='1' AND EN='0') THEN
+					NEXT_STATE <= AIM;
+				ELSIF(PLAYER='0' AND ENEMY_B='1' AND EN='1') THEN
+					NEXT_STATE <= SHOOT;
+				ELSIF(PLAYER='0' AND ENEMY_A='1') THEN
+					NEXT_STATE <= BURST;
+				ELSIF(PLAYER='1' AND ENEMY_A='0' AND ENEMY_B='0') THEN
+					NEXT_STATE <= COVER;
+				ELSIF(PLAYER='1' AND ENEMY_B='1' AND EN='1') THEN
+					NEXT_STATE <= AID;
+				ELSIF((PLAYER='0' AND EN='0') OR (PLAYER='1' AND ENEMY_A='1' AND ENEMY_B='1' AND EN='1')) THEN
+					NEXT_STATE <= FINISH;
+				ELSE
+					NEXT_STATE <= BLACK;
+				END IF;
+			WHEN STORM =>
+			--Kondisi saat ini 'STORM'
+				IF(PLAYER='0') THEN
+					NEXT_STATE <= STORM;
+				ELSIF(PLAYER='1') THEN
+					NEXT_STATE <= BLACK;
+				ELSE
+					NEXT_STATE <= STORM;
+				END IF;
+			WHEN AIM =>
+			--Kondisi saat ini 'AIM'
+				IF(ENEMY_A='0' AND ENEMY_B='0' AND EN='1') THEN
+					NEXT_STATE <= BLACK;
+				ELSIF(PLAYER='0') THEN
+					NEXT_STATE <= AIM;
+				ELSIF((PLAYER='1' AND ENEMY_B='1') OR (PLAYER='1' AND ENEMY_A='1')) THEN
+					NEXT_STATE <= COVER;
+				ELSE
+					NEXT_STATE <= AIM;
+				END IF;
+			WHEN SHOOT =>
+			--Kondisi saat ini 'SHOOT'
+				IF(ENEMY_A='0' AND ENEMY_B='0' AND EN='1') THEN
+					NEXT_STATE <= BLACK;
+				ELSIF(PLAYER='0' AND ENEMY_B='1' AND EN='0') THEN
+					NEXT_STATE <= AIM;
+				ELSIF(PLAYER='0' AND ENEMY_B='1' AND EN='1') THEN
+					NEXT_STATE <= SHOOT;
+				ELSIF(PLAYER='1' AND ENEMY_A='1') THEN
+					NEXT_STATE <= BURST;
+				ELSE
+					NEXT_STATE <= SHOOT;
+				END IF;
+			WHEN BURST =>
+			--Kondisi saat ini 'BURST'
+				IF(ENEMY_A='0' AND ENEMY_B='0' AND EN='1') THEN
+					NEXT_STATE <= BLACK;
+				ELSE
+					NEXT_STATE <= BURST;
+				END IF;
+			WHEN COVER =>
+			--Kondisi saat ini 'COVER'
+				IF(ENEMY_A='0' AND ENEMY_B='0' AND EN='1') THEN
+					NEXT_STATE <= BLACK;
+				ELSIF(PLAYER='0' AND ENEMY_B='1') THEN
+					NEXT_STATE <= AIM;
+				ELSIF(ENEMY_A='1') THEN
+					NEXT_STATE <= BURST;
+				ELSIF(PLAYER='1') THEN
+					NEXT_STATE <= COVER;
+				ELSE
+					NEXT_STATE <= COVER;
+				END IF;
+			--Kondisi saat ini 'AID'
+			WHEN AID =>
+				IF(EN='0') THEN
+					NEXT_STATE <= BLACK;
+				ELSIF(EN='1') THEN
+					NEXT_STATE <= AID;
+				ELSE
+					NEXT_STATE <= AID;
+				END IF;
+			--Kondisi saat ini 'FINISH'
+			WHEN FINISH =>
+				NEXT_STATE <= FINISH;
+			--Apabila kondisi diluar dari yang telah ditentukan
+			WHEN OTHERS => NULL;
+		END CASE;
+END PROCESS;
+
+PROCESS(CLK, RST, PLAYER_HP, ENEMYA_HP, ENEMYB_HP, TEMP) IS
+	BEGIN
+		
+		IF(PLAYER_HP > (ENEMYA_HP + ENEMYB_HP)) THEN
+			EN <= '1';
+		ELSE
+			EN <= '0';
+		END IF;
+	
+		IF(RST='1') THEN
+			TEMP 	 <= '0';
+		ELSIF(RISING_EDGE(CLK)) THEN
+			CASE PRESENT IS
+				--Cek apabila nilai present = 'GREEN'
+				WHEN GREEN =>
+					IF(NEXT_STATE=GREEN) THEN
+						TEMP <= '0';
+					ELSIF(NEXT_STATE=YELLOW) THEN
+						TEMP <= '1';
+					ELSE
+						TEMP <= 'X';
+					END IF;
+				--Cek apabila nilai present = 'YELLOW'
+				WHEN YELLOW =>
+					IF(NEXT_STATE=GREEN OR NEXT_STATE=RED) THEN
+						TEMP <= '1';
+					ELSE
+						TEMP <= 'X';
+					END IF;
+				--Cek apabila nilai present = 'RED'
+				WHEN RED => 
+					IF(NEXT_STATE=RED) THEN
+						TEMP <= '0';
+					ELSIF(NEXT_STATE=INTERRUPT OR NEXT_STATE=SEEK OR NEXT_STATE=HIDE OR NEXT_STATE=BLACK) THEN
+						TEMP <= '1';
+					ELSE
+						TEMP <= 'X';
+					END IF;
+				--Cek apabila nilai present = 'INTERRUPT'
+				WHEN INTERRUPT =>
+					IF(NEXT_STATE=INTERRUPT) THEN
+						TEMP <= '0';
+					ELSIF(NEXT_STATE=RED OR NEXT_STATE=BLACK OR NEXT_STATE=HIDE) THEN
+						TEMP <= '1';
+					ELSE
+						TEMP <= 'X';
+					END IF;
+				--Cek apabila nilai present = 'SEEK'
+				WHEN SEEK =>
+					IF(NEXT_STATE=YELLOW OR NEXT_STATE=INTERRUPT OR NEXT_STATE=BLACK) THEN
+						TEMP <= '1';
+					ELSE
+						TEMP <= 'X';
+					END IF;
+				--Cek apabila nilai present = 'HIDE'
+				WHEN HIDE =>
+					IF(NEXT_STATE=YELLOW OR NEXT_STATE=RED OR NEXT_STATE=BLACK) THEN
+						TEMP <= '1';
+					ELSE
+						TEMP <= 'X';
+					END IF;
+				--Cek apabila nilai present = 'BLACK'
+				WHEN BLACK =>
+					IF(NEXT_STATE=STORM OR NEXT_STATE=AIM OR NEXT_STATE=SHOOT OR NEXT_STATE=BURST OR NEXT_STATE=COVER OR NEXT_STATE=AID OR NEXT_STATE=FINISH) THEN
+						TEMP <= '1';
+					ELSE 
+						TEMP <= 'X';
+					END IF;
+				--Cek apabila nilai present = 'STORM'
+				WHEN STORM =>
+					IF(NEXT_STATE=STORM) THEN
+						TEMP <= '0';
+					ELSIF(NEXT_STATE=BLACK) THEN
+						TEMP <= '1';
+					ELSE
+						TEMP <= 'X';
+					END IF;
+				--Cek apabila nilai present = 'AIM'
+				WHEN AIM =>
+					IF(NEXT_STATE=AIM) THEN
+						TEMP <= '0';
+					ELSIF(NEXT_STATE=BLACK OR NEXT_STATE=COVER) THEN
+						TEMP <= '1';
+					ELSE
+						TEMP <= 'X';
+					END IF;
+				--Cek apabila nilai present = 'SHOOT'	
+				WHEN SHOOT =>
+					IF(NEXT_STATE=SHOOT) THEN
+						TEMP <= '0';
+					ELSIF(NEXT_STATE=BLACK OR NEXT_STATE=AIM OR NEXT_STATE=BURST) THEN
+						TEMP <= '1';
+					ELSE
+						TEMP <= 'X';
+					END IF;
+				--Cek apabila nilai present = 'BURST'	
+				WHEN BURST =>
+					IF(NEXT_STATE=BURST) THEN
+						TEMP <= '0';
+					ELSIF(NEXT_STATE=BLACK) THEN
+						TEMP <= '1';
+					ELSE
+						TEMP <= 'X';
+					END IF;
+				--Cek apabila nilai present = 'COVER'	
+				WHEN COVER =>
+					IF(NEXT_STATE=COVER) THEN
+						TEMP <= '0';
+					ELSIF(NEXT_STATE=BLACK OR NEXT_STATE=AIM OR NEXT_STATE=BURST) THEN
+						TEMP <= '1';
+					ELSE
+						TEMP <= 'X';
+					END IF;
+				--Cek apabila nilai present = 'AID'	
+				WHEN AID =>
+					IF(NEXT_STATE=AID) THEN
+						TEMP <= '0';
+					ELSIF(NEXT_STATE=BLACK) THEN
+						TEMP <= '1';
+					ELSE
+						TEMP <= 'X';
+					END IF;	
+				--Cek apabila telah 'Win'
+				WHEN FINISH =>
+					IF(NEXT_STATE=FINISH) THEN
+						TEMP <= 'X';
+					ELSE
+						TEMP <= 'X';
+					END IF;
+				WHEN OTHERS => NULL;
+			END CASE;
+			PRESENT <= NEXT_STATE;
+		END IF;
+END PROCESS;
+OUTPUT <= TEMP;
+END BEHAVIOUR;
